@@ -9,14 +9,7 @@ Serverless portfolio management application where a user can track and maintain 
 - [x] **The application allows users to create and delete portfolio items.**
 - [x] **The application only displays items for a logged in user.**
 
-### Images
-```
-![image](https://user-images.githubusercontent.com/7910856/80206818-51aa7f80-862d-11ea-842f-3169516927f9.png)
 
-![image](https://user-images.githubusercontent.com/7910856/80209244-fcbd3800-8631-11ea-9aaa-abe7bef2a5f4.png)
-
-![image](https://user-images.githubusercontent.com/7910856/80209666-bfa57580-8632-11ea-91e2-0e7bd86b5bc1.png)
-```
 
 The application consists of a frontend and backend.
 
