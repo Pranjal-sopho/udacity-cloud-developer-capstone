@@ -1,0 +1,182 @@
+service:
+  name: serverless-portfolio
+
+custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: ${self:service.name}
+        description: Serverless portfolio application
+
+plugins:
+  - serverless-iam-roles-per-function
+  - serverless-reqvalidator-plugin
+  - serverless-webpack
+  - serverless-aws-documentation
+  #- serverless-dynamodb-local
+  #- serverless-s3-local
+  #- serverless-offline
+
+package:
+  individually: true
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+  tracing:
+    lambda: true
+    apiGateway: true
+
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-south-1'}
+
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    FOLIO_TABLE: portfolio-${self:provider.stage}
+    FOLIO_TABLE_IDX: folio-idx-${self:provider.environment.FOLIO_TABLE}
+    SIGNED_URL_EXPIRATION: 300
+    JWKS_URL: 'https://dev-zuzb6tqx.auth0.com/.well-known/jwks.json'
+    AWS_XRAY_CONTEXT_MISSING: LOG_ERROR
+
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - codedeploy:*
+      Resource:
+        - '*'
+
+functions:
+  Auth:
+    handler: src/lambda/auth/auth0Authorizer.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - '*'
+
+  Getfolio:
+    handler: src/lambda/http/getFolio.handler
+    events:
+      - http:
+          authorizer: Auth
+          cors: true
+          method: get
+          path: folios
+
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.FOLIO_TABLE}/index/${self:provider.environment.FOLIO_TABLE_IDX}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - '*'
+
+  Createfolio:
+    handler: src/lambda/http/createPortfolio.handler
+    events:
+      - http:
+          authorizer: Auth
+          cors: true
+          method: post
+          path: folios
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Create a new entry to the folio.
+            description: Create a new entry to the folio.
+            # requestModels:
+            #   'application/json': SavefolioRequest
+
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.FOLIO_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - '*'
+
+  Deletefolio:
+    handler: src/lambda/http/deleteFolio.handler
+    events:
+      - http:
+          authorizer: Auth
+          cors: true
+          method: delete
+          path: folios/{folioId}
+          documentation:
+            summary: Delete a folio entry.
+            description: Delete a folio entry.
+
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.FOLIO_TABLE}
+      - Effect: Allow
+        Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+        Resource:
+          - '*'
+
+resources:
+  Resources:
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+
+    FolioDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: folioId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: folioId
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.FOLIO_TABLE_IDX}
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              #- AttributeName: folioId
+              #  KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.FOLIO_TABLE}

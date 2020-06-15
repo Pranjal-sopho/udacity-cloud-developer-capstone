@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "title": "portfolio",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "buyDate": {
+      "type": "string"
+    },
+    "volume": {
+      "type": "integer"
+    },
+    "price": {
+      "type": "number"
+    }
+  },
+  "required": ["name", "volume", "price"],
+  "additionalProperties": false
+}
